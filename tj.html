@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TJ Tasks</title>
+    <style>
+span {
+    white-space:pre;
+}
+button, a
+{
+  background-color: #e7e7e7;
+  border: 1px solid black;
+  color: black;
+  padding: 10px 20px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+  transition-duration: 0.4s;
+  cursor: pointer;
+}
+
+a
+{
+  padding: 5px;
+  width: 100px;
+}
+
+button:hover, a:hover {
+  background-color: #4d534d;
+  color: white;
+}
+
+input[type=text] {
+  min-width: 100px;
+  padding: 12px 20px;
+  margin: 8px 0;
+  box-sizing: border-box;
+}
+
+#txtDesc{
+    width: 200px;
+}
+
+.table-area {
+  width: 1000px;
+  margin: 0 auto;
+}
+
+table.responsive-table {
+  /* display: table; */
+  /* required for table-layout to be used (not normally necessary; included for completeness) */
+  /* table-layout: fixed; */
+  /* this keeps your columns with fixed with exactly the right width */
+  width: 100%;
+  /* table must have width set for fixed layout to work as expected */
+  height: 100%;
+  border-top: black solid 1px;
+  border-bottom: black solid 1px;
+  margin: 5px 0;
+}
+
+table.responsive-table thead {
+  /* position: fixed; */
+  top: 50px;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 50px;
+  line-height: 3em;
+  background: #eee;
+  text-transform: uppercase;
+  /* table-layout: fixed; */
+  /* display: table; */
+}
+
+table.responsive-table th {
+  background: #eee;
+}
+
+table.responsive-table td {
+  line-height: 2em;
+}
+
+table.responsive-table tr > td,
+table.responsive-table th {
+  text-align: left;
+}
+
+#result{
+    margin: 10px;
+}
+    </style>
+</head>
+<body>
+
+    <div class="table-area">
+        <div class="form">
+            <label for="txtIssue"> Issue: </label> <input type="text" id="txtIssue" required>
+            <label for="txtDesc"> Name: </label> <input type="text" id="txtDesc">
+            <button onclick="addIssue()">Add</button>
+        </div>
+        <table class="responsive-table table">
+        </table>
+        <button onclick="generateTJ()">Generate TJ format</button>
+        <div id="result"></div>
+    </div>
+
+
+    <script>
+        var issues = [
+            {issue: 'communication_9' ,name: "Meetings", startTime:'00:00', total: '00:00'},
+            {issue: 'firmware_update_19', name: "Firm Update - Brocade test session", startTime:'00:00', total: '00:00'},
+            {issue: 'firmware_update_5', name: "Firm Update - Brocade implementation", startTime:'00:00', total: '00:00'},
+            {issue: 'firmware_update_15', name: "Firm Update - Delivery report", startTime:'00:00', total: '00:00'},
+            {issue: 'communication_11', name: "1-1", startTime:'00:00', total: '00:00'},
+        ];
+
+        // Global status if a issue is running
+        let statusIssue = false;
+        let elements = {
+            issue: 0, name: 1, startTime: 2, totalHour: 3, startStop: 4, actions: 5
+        }
+
+        function checkIssueOnTable(issue){
+
+            let tableElement = document.querySelector("table");
+            for (let element of tableElement.rows) {
+                if (element.cells[elements.issue].innerHTML == issue){
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        function addIssue(){
+            let txtIssue = document.getElementById('txtIssue');
+            let txtDesc = document.getElementById('txtDesc');
+            let issue = txtIssue.value;
+            let desc = txtDesc.value;
+
+            if(issue != ''){
+                if (! checkIssueOnTable(issue)) {
+                    let table = document.querySelector("table");
+                    let row = table.insertRow();
+                    row.id = issue;
+
+                    // Issue
+                    let cell = row.insertCell().appendChild(document.createTextNode(issue));
+
+                    // Description
+                    cell = row.insertCell().appendChild(document.createTextNode(desc));
+
+                    // Start time
+                    cell = row.insertCell().appendChild(document.createTextNode('00:00'));
+
+                    // Total
+                    cell = row.insertCell().appendChild(document.createTextNode('00:00'));
+
+                    // Start Stop
+                    // if one issue is running, do not add the Play action
+                    let content = addLink('Play', issue);
+
+                    if (statusIssue){
+                        content = document.createTextNode('');
+                    }
+                    cell = row.insertCell().appendChild(content);
+
+                    // Actions
+                    cell = row.insertCell().appendChild(addLink('Edit', issue));
+                } else {
+                    alert("Issue already on the table!");
+                }
+
+            } else {
+                alert("Issue is mandatory!");
+            }
+            txtIssue.value = '';
+            txtDesc.value = ''
+        }
+
+        function generateTJ(){
+            // Read the table and convert to TJ booking format
+            let tableElement = document.querySelector("table");
+            let result = document.getElementById("result");
+            result.innerHTML = "";
+
+            var todayDate = new Date().toISOString().slice(0, 10);
+
+            //booking communication_9       2021-09-30-09:00 +30min # Meetings
+            let check = false;
+            let init = '09:00'; // Start at 9AM
+            for(let row of tableElement.rows){
+                if(row.rowIndex > 0){
+                    let issue = row.cells[elements.issue].innerHTML;
+                    let description = row.cells[elements.name].innerHTML.split(':');
+                    let time = row.cells[elements.totalHour].innerHTML.split(':');
+                    let init_clock = init.split(':');
+
+                    let minute = (parseInt(time[1]));
+                    //console.log("min'",minute);
+                    minute = Math.round(minute/5) * 5;
+                    //console.log("min2'",minute);
+                    //console.log("min3'",minute);
+
+                    let hour = parseInt(time[0]);
+                    console.log(hour);
+
+                    if (minute >= 60){
+                        minute = 0;
+                        hour = hour + 1;
+                    }
+
+                    let timeFormat = '0.00';
+
+                    if (hour > 0) {
+                        minute = minute / 60 ;
+                        timeFormat = hour + minute;
+                        timeFormat = `${timeFormat.toFixed(2)}h`;
+                    } else if (minute > 0) {
+                        timeFormat = `${minute}min`;
+                        minute = minute / 60 ;
+                    }
+
+                    if (timeFormat != '0.00'){
+                        check = true;
+                        result.innerHTML = result.innerHTML + `<span>booking ${issue.padEnd(30," ")} ${todayDate}-${init} +${timeFormat.padEnd(10, " ")} # ${description} </span> <br>`;
+
+                        let validHour = parseInt(init_clock[0]) + hour;
+                        let validMinute = Math.round(  parseInt(init_clock[1]) + (minute * 60) );
+                        if (validMinute >= 60) {
+                            validMinute = validMinute - 60;
+                            validHour = validHour + 1;
+                        }
+
+                        init = `${validHour.toString().padStart(2,0)}:${validMinute.toString().padStart(2,0)}`
+                    }
+                }
+            }
+
+            if (!check){
+                result.innerHTML = 'Nothing to be clocked';
+            }
+
+        }
+
+        function setAction(row, text, cell){
+
+            let tableElement = row.parentElement;
+            for (let element of tableElement.rows) {
+                if(text == '')
+                    element.cells[cell].innerHTML = text;
+                else{
+                    let linkElement = addLink(text, element.cells[elements.issue].innerHTML);
+
+                    if (! (cell == elements.actions && element.cells[elements.startStop].innerHTML.toString().includes('Stop') ) )
+                        element.cells[cell].appendChild(linkElement);
+                }
+            }
+
+        }
+
+        function setDateTime(time) {
+            var d = new Date(),
+                parts = time.split(':'),
+                hours = parseInt(parts[0], 10),
+                minutes = parseInt(parts[1], 10);
+
+            d.setHours(hours);
+            d.setMinutes(minutes);
+
+            return d;
+        }
+
+        function getDiffTime(time){
+            let start = new Date(Date.now());
+            let stop = setDateTime(time);
+            var delta  = Math.abs(stop - start);
+            console.log(delta);
+            // let min = ((delta / (1000*60)) % 60);
+            // let hours = Math.round((delta / (1000*60*60)) % 24);
+            var hours = Math.floor((delta % 86400000) / 3600000); // hours
+            var min = Math.round(((delta % 86400000) % 3600000) / 60000); // minutes
+            console.log(min);
+            console.log(hours);
+            // var deltaHour = start.getHours() - stop.getHours();
+            // var deltaMinutes = start.getMinutes() - stop.getMinutes();
+
+            return  hours.toString().padStart(2,0) + ':' + min.toString().padStart(2,0);
+        }
+
+        function stopTimer(issue, interval){
+            statusIssue = false;
+
+            let row = document.getElementById(issue);
+
+            let timeElement = row.cells[elements.startTime];
+            let timeText = timeElement.innerHTML;
+
+            let diffTime = getDiffTime(timeText).split(':');
+            console.log(diffTime)
+
+            let diffHour = parseInt(diffTime[0]);
+            let diffMinutes = parseInt(diffTime[1]);
+
+            let totalElement = row.cells[elements.totalHour];
+            let time = totalElement.innerHTML.split(':');
+            let hours = parseInt(time[0]) + diffHour;
+            let minutes = parseInt(time[1]) + diffMinutes;
+            if (minutes >= 60) {
+                minutes = minutes - 60;
+                hours = hours + 1;
+            }
+
+            totalElement.innerHTML = hours.toString().padStart(2,0) + ':' + minutes.toString().padStart(2,0);
+            timeElement.innerHTML = '00:00';
+
+            let playElement = row.cells[elements.startStop];
+            playElement.innerHTML = '';
+            setAction(row, 'Play', elements.startStop );
+
+            let actionElement = row.cells[elements.actions];
+            let linkElement2 = addLink('Edit', issue);
+            actionElement.appendChild(linkElement2);
+        }
+
+        function startTimer(issue){
+            statusIssue = true;
+
+            let row = document.getElementById(issue);
+            let timeElement = row.cells[elements.startTime];
+
+            let start = new Date(Date.now());
+            let hours = start.getHours();
+            let minutes = start.getMinutes();
+
+            timeElement.innerHTML = hours.toString().padStart(2,0) + ':' + minutes.toString().padStart(2,0);
+
+            setAction(row, '', elements.startStop);
+
+            let playElement = row.cells[elements.startStop];
+            let linkElement = addLink('Stop', issue);
+            playElement.innerHTML = '';
+            playElement.appendChild(linkElement);
+
+            let actionElement = row.cells[elements.actions];
+            actionElement.innerHTML = '';
+        }
+
+        function editHour(issue){
+
+            let row = document.getElementById(issue);
+            let totalElement = row.cells[elements.totalHour];
+            let initValue = totalElement.innerHTML;
+            totalElement.innerHTML = "";
+            totalElement.appendChild(createEditElement(initValue));
+
+            setAction(row, '', elements.actions);
+
+            let playElement = row.cells[elements.startStop];
+            playElement.innerHTML = '';
+
+            let actionElement = row.cells[elements.actions];
+            actionElement.innerHTML = '';
+            actionElement.appendChild(addLink('Save', issue));
+        }
+
+        function saveHour(issue){
+
+            let row = document.getElementById(issue);
+            let totalElement = row.cells[elements.totalHour];
+            let actionElement = row.cells[elements.actions];
+
+            let newValue = document.getElementById('txtHour').value;
+
+            let re = /\d{2}\:\d{2}/i;
+            let found = newValue.match(re);
+
+            if (! found){
+                alert("Invalid hour format (xx:xx)!");
+                return;
+            }
+
+
+            totalElement.innerHTML = newValue;
+
+            actionElement.innerHTML = "";
+            setAction(row, 'Edit', elements.actions);
+
+            if (!statusIssue){
+                let startElement = row.cells[elements.startStop];
+                startElement.appendChild(addLink('Play', issue));
+            }
+
+        }
+
+        function generateTableHead(table, data) {
+            let thead = table.createTHead();
+            let row = thead.insertRow();
+            for (let key of data) {
+                let th = document.createElement("th");
+                let text = document.createTextNode(key);
+                th.appendChild(text);
+                row.appendChild(th);
+            }
+            let th = document.createElement("th");
+            let text = document.createTextNode("Start/Stop");
+            th.appendChild(text);
+            row.appendChild(th);
+
+            th = document.createElement("th");
+            text = document.createTextNode("Actions");
+            th.appendChild(text);
+            row.appendChild(th);
+        }
+
+        function createLink(text, href) {
+            let linkElement = document.createElement("a");
+            var linkText = document.createTextNode(text);
+            linkElement.appendChild(linkText);
+            linkElement.href = href;
+            return linkElement;
+        }
+
+        function createEditElement(initialText){
+            let element = document.createElement("input");
+            element.setAttribute("type", "text");
+            element.setAttribute("value", initialText);
+            element.setAttribute("name", "txtHour");
+            element.setAttribute("id", "txtHour");
+            element.setAttribute("size", "6");
+            element.setAttribute("maxlength", "5");
+            return element;
+        }
+
+        function addLink(type, issue) {
+            types = {
+                'Edit': `javascript:editHour('${issue}')`,
+                'Save': `javascript:saveHour('${issue}')`,
+                'Play': `javascript:startTimer('${issue}')`,
+                'Stop': `javascript:stopTimer('${issue}')`
+            }
+
+            return createLink(type, types[type]);
+        }
+
+        function generateTable(table, data) {
+            for (let element of data) {
+                let row = table.insertRow();
+                row.id = element['issue'];
+                for (key in element) {
+                    let cell = row.insertCell();
+                    let text = document.createTextNode(element[key]);
+                    cell.appendChild(text);
+                }
+                // Play/ Stop cell
+                let cell = row.insertCell();
+                let playLink = addLink('Play', element['issue']);
+                cell.appendChild(playLink);
+
+                // Action cell
+                let cellActions = row.insertCell();
+                let editLink = addLink('Edit', element['issue']);
+                cellActions.appendChild(editLink);
+            }
+
+            //generateGlobalElements();
+        }
+
+        let table = document.querySelector("table");
+        let data = Object.keys(issues[0]);
+
+        generateTable(table, issues);
+        generateTableHead(table, data);
+
+    </script>
+</body>
+</html>
